@@ -1,0 +1,62 @@
+on:
+  push:
+    paths:
+      - 'infrastructure/production/1_main.bicep'
+      - 'modules/bicep/**'
+concurrency:
+  group: bicep-production
+permissions:
+  id-token: write
+  contents: read
+name: Azure Bicep Production Deployment
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run Bicep linter
+      run: az bicep build --file ./infrastructure/production/1_main.bicep
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    # Log into Azure
+    - uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: deploy
+      uses: azure/arm-deploy@v1
+      with:
+        deploymentName: ${{ github.run_number }}
+        subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        scope: subscription
+        region: germanywestcentral
+        template: ./infrastructure/production/1_main.bicep
+        deploymentMode: Validate
+  deploy:
+    needs: [lint,validate]
+    runs-on: ubuntu-latest
+  #  needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      # Checkout code
+    - uses: actions/checkout@main
+
+      # Log into Azure
+    - uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    # Deploy Bicep file
+    - name: deploy
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        scope: subscription
+        region: germanywestcentral
+        template: ./infrastructure/production/1_main.bicep
+        failOnStdErr: false
